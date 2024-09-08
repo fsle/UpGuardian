@@ -8,7 +8,7 @@ import argparse
 from solidity_parser import parser
 
 
-from utils import get_contract_storage, get_contract_abi, get_contract_content, is_contract_interface, get_source_unit_object, get_source_unit
+from utils import get_contract_storage, get_contract_content, is_contract_interface, get_source_unit_object, get_source_unit
 from utils import has_function_only_one_return_val, get_function_return_first_type
 from utils import compute_function_sighash, get_functions_sigs_from_artefact
 from utils import warning, todo, error, good, info
@@ -44,7 +44,7 @@ Upgrade Guardian:
 
 TODO - add check for storage gaps ?
 TODO:
-1. online check, is initialize
+1. online check, is initialized
     - uninitialized implem contract (https://medium.com/immunefi/wormhole-uninitialized-proxy-bugfix-review-90250c41a43a)
     - Uninitialized State Variables
 
@@ -556,7 +556,7 @@ check_all_initialize_functions_are_called(args.sc1, args.fp_binfo1)
 check_for_dangerous_opcodes(args.sc1, args.fp_binfo1)
 
 """
-When we have two contracts then do the diffing
+When we have two contracts then do the
 - storage collision check
 - function classhing check
 """

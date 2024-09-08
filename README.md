@@ -1,6 +1,16 @@
 # UpGuardian
 
 
+## Installation
+
+- Install the following fork of the main `solidity_parser` repo. It supports `immutable` keyword:
+
+https://github.com/Caglankaan/python-solidity-parser
+
+```bash
+pip3 installl -r requirements.txt
+```
+
 
 ## URLs / Ressources
 - python wrapper of antlr4 solidity language parsing

@@ -1,5 +1,4 @@
 antlr4-python3-runtime==4.9.3
 loguru==0.7.2
 safe-pysha3==1.0.4
-solidity-parser @ file:///Users/francois/work/hackweek/UpGuardian/python-solidity-parser
 termcolor==2.4.0
