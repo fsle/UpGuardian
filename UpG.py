@@ -2,26 +2,27 @@ import sys
 import code
 import os
 import json
-import sha3
+
 import argparse
 
 from solidity_parser import parser
 
 
 from utils import get_contract_storage, get_contract_abi, get_contract_content, is_contract_interface, get_source_unit_object, get_source_unit
+from utils import has_function_only_one_return_val, get_function_return_first_type
+from utils import compute_function_sighash, get_functions_sigs_from_artefact
 from utils import warning, todo, error, good, info
 
 """
 Upgrade Guardian:
 
 1.Load 
-    - parses AST of source(s)
-    - loads json compilation build info files
+    - parses AST from source(s)
+    - loads json build info files
 
 2. detects upgreadeability (UUPS vs TTP) (TODO)
 
 3. make security checks (for UUPS)
-    TODO ? - upgradeToAndCall function makes use of _authorizeUpgrade -> check that this function has been overriden with good access control
         - if UUPS upgrade logic is in implementation
         - should have a call to upgradeToAndCall which should do a super.upgradeToAndCall() (UUPS)
         - verify that the `_authorizeUpgrade` is overriden and has good control access
@@ -77,10 +78,8 @@ def check_constructor(name, ct):
         - render proxy contract useless (pointing to destructed contract)
     """
     info("Constructor check")
-
     constructor = None
     disabler = False
-    #code.interact(local=locals())
     for func in ct.functions.keys():
         f = ct.functions[func]
         if f.isConstructor:
@@ -100,6 +99,10 @@ def check_constructor(name, ct):
 
 
 def check_initializers(ct):
+    """
+    Checks that init functions have a modifier. If not, an attacker could:
+        -  re-initialize the contract
+    """
     for func in ct.functions.keys():
         f = ct.functions[func]
         modifs = f._node.modifiers
@@ -116,9 +119,11 @@ def check_initializers(ct):
             warning(f"{func} function has no modifier initializer")
             todo("\tCheck if there is a modifier is preventing from reinit")
 
-
-
 def upgrade_access_control(ct):
+    """
+    Checks that the _authorizeUpgrade function has a modifier that restricts its access.
+    If not, an attacker could upgrade the contract and change its implementation.
+    """
     for func in ct.functions.keys():
         f = ct.functions[func]
         modifs = f._node.modifiers
@@ -133,37 +138,36 @@ def upgrade_access_control(ct):
                     todo(f"\tCheck is this modifier correctly restricts access ({ct.name}:L{m.loc['start']['line']})")
 
         if isUpgradeFunction and not hasAccessControl:
-            warning(f"{func} upgrade function has no access control")
-            todo("\tCheck if there is a modifier that restricts access")
+            warning(f"{func} upgrade function has no 'only' access control")
+            todo("\tCheck if the following modifiers restrict access to the upgrade")
+            for m in m.name:
+                todo(f"\t{m.name}")
 
 
 def check_for_immutables(ct):
+    """
+    Identifies immutables variables and raises awareness about these kind of variables.
+    Upgradeable contracts have no constructors (should not use them) and rely on initializers.
+    However, in some cases immutable variables are upgrade safe.
+    this can be used to bypass oz warning -> //@custom:oz-upgrades-unsafe-allow state-variable-immutable
+    """
     for var_name in ct.stateVars.keys():
         var = ct.stateVars[var_name]
         if var.isDeclaredImmutable:
             warning(f"{var_name} variable is immutable")
             todo("\tCheck if it is intended (i.e: if this value is never going to be updated (will be in bytecode at deploy time))")
 
-def check_for_storage_gap(ct):
-    """
-    Checks for storage gap
-    TODO
-    """
-    hasStorageGaps = False
-    for var_name in ct.stateVars.keys():
-        var = ct.stateVars[var_name]
-        if var.isDeclaredImmutable:
-            warning(f"{var_name} variable is immutable")
-            todo("\tCheck if it is")
-
 def display_storage_data(storage):
+    """
+    Display the storage data type, label and slot number
+    """
     return f"{storage['type']} {storage['label']} @ slot{storage['slot']}"
 
 def compare_storage_slots(sl1, sl2):
     """
     Comparing storage slot 1 and storage slot 2:
     sl1 is supposed to be the first implementation version or the proxy
-    sl2 is supposed to be the second implem or the implmentation
+    sl2 is supposed to be the second implem or the implementation
     """
     changes = 0
     for i in range(len(sl1['storage'])):
@@ -191,22 +195,9 @@ def compare_storage_slots(sl1, sl2):
             continue
 
 
-def has_function_only_one_return_val(f):
-    ret = False
-    if len(f.returns.keys()) == 1:
-        ret = True
-    return ret
-
-def get_function_return_first_type(f):
-    ret = None
-    first_key = list(f.returns.keys())[0]
-    ret = f.returns[first_key].typeName.namePath
-    return ret
-
-
 def get_structure_members(sU, name):
     """
-    We can only get structure definition by using the source Unit (not objectify)
+    We can only get structure definition by using the source Unit (not the obj version)
     """
     struct_def = None
     for node in sU.children:
@@ -217,10 +208,11 @@ def get_structure_members(sU, name):
 
 def check_erc7201_storage(sc, binfo):
     """
+    Still in dev ....
+    Finds a ERC7201 struct and checks for collision with a new version of the contract
     This would work with any storage structure
-    - check that structure did not changed
-    erc7201_storage[bytes32] = returnStruct
-    1/ check bytes32 declaration
+    1/ check bytes32 declaration (storage location that follow the ERC7201 scheme 
+        keccak256(abi.encode(uint256(keccak256("STORAGE_NAME")) - 1)) & ~bytes32(uint256(0xff))
     2/ func with asm block that uses this bytes32 constant
     3/ get return type
     4/ find structure declaration / members
@@ -299,29 +291,6 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
     #code.interact(local=locals())
     compare_storage_slots(storageLayout1, storageLayout2)
 
-
-def get_abi_from_artefact(name, fp):
-    abi = None
-    binfo = json.loads(open(fp,'r').read())
-    abi = get_contract_abi(name, binfo)
-    return abi
-
-
-def get_functions_sigs_from_artefact(name, build_info_fp):
-    abi = get_abi_from_artefact(name, build_info_fp)
-    sigs = []
-    for item in abi:
-        if item['type'] == 'function':
-            # Construct the function signature
-            inputs = ','.join([input['type'] for input in item['inputs']])
-            signature = f"{item['name']}({inputs})"
-            sigs.append(signature)
-    return sigs
-
-def compute_function_sighash(sig):
-    k = sha3.keccak_256()
-    k.update(bytes(sig, 'ascii'))
-    return k.hexdigest()[0:8]
 
 def function_clashing(sc1, build_info_fp1, sc2, build_info_fp2):
     """
@@ -566,7 +535,7 @@ def check_for_dangerous_opcodes(name, build_info_fp):
 def UUPSChecks(name, build_info_fp):
     binfo = json.loads(open(build_info_fp, 'r').read())
     sUO = get_source_unit_object(name, binfo)
-    #code.interact(local=locals())
+
     check_constructor(name, sUO.contracts[name])
     check_initializers(sUO.contracts[name])
     upgrade_access_control(sUO.contracts[name])

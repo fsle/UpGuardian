@@ -2,7 +2,8 @@ import os
 import code
 from solidity_parser import parser
 from termcolor import colored, cprint
-
+import sha3
+import json
 
 def get_contract_info(name, binfo, info_type):
     """
@@ -33,6 +34,9 @@ def get_contract_filepath(name, binfo):
         for ct_name in list(binfo['output']['contracts'][ct_file].keys()):
             if name == ct_name:
                 ret = ct_file
+    if ret == None:
+        error("The specified contract name could not be find in the build info file")
+        exit(1)
     return ret
 
 def get_contract_content(name, binfo):
@@ -68,6 +72,41 @@ def get_source_unit_object(name, binfo):
     sourceUnit = get_source_unit(contract)
     sUO = parser.objectify(sourceUnit)
     return sUO
+
+def has_function_only_one_return_val(f):
+    ret = False
+    if len(f.returns.keys()) == 1:
+        ret = True
+    return ret
+
+def get_function_return_first_type(f):
+    ret = None
+    first_key = list(f.returns.keys())[0]
+    ret = f.returns[first_key].typeName.namePath
+    return ret
+
+def compute_function_sighash(sig):
+    k = sha3.keccak_256()
+    k.update(bytes(sig, 'ascii'))
+    return k.hexdigest()[0:8]
+
+def get_abi_from_artefact(name, fp):
+    abi = None
+    binfo = json.loads(open(fp,'r').read())
+    abi = get_contract_abi(name, binfo)
+    return abi
+
+
+def get_functions_sigs_from_artefact(name, build_info_fp):
+    abi = get_abi_from_artefact(name, build_info_fp)
+    sigs = []
+    for item in abi:
+        if item['type'] == 'function':
+            # Construct the function signature
+            inputs = ','.join([input['type'] for input in item['inputs']])
+            signature = f"{item['name']}({inputs})"
+            sigs.append(signature)
+    return sigs
 
 def warning(text):
     out = colored(text, "red", attrs=["reverse", "blink"])
