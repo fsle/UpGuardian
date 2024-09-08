@@ -23,12 +23,11 @@ Upgrade Guardian:
 2. detects upgreadeability (UUPS vs TTP) (TODO)
 
 3. make security checks (for UUPS)
-        - if UUPS upgrade logic is in implementation
+    - if UUPS upgrade logic is in implementation
         - should have a call to upgradeToAndCall which should do a super.upgradeToAndCall() (UUPS)
         - verify that the `_authorizeUpgrade` is overriden and has good control access
     - disableInitializers in constructor (for implem)
-    - initialize() method with initialize modifier
-    TODO ? - reinitializeV??() method with reinitialize(5) modifier and access control modifier ? 
+    - initialize() an reinitialize() method with initialize modifier
     - detect immutable usage in contract
 
     - check for storage changes (implem v1 vs v2)
@@ -37,8 +36,6 @@ Upgrade Guardian:
     - check for function clashing between proxy and implmentation
     - check that all initializer are called in main contract (and not more than once)
     - check for delegatecall / selfdestruct() calls
-    
-    - check upgrade access control (authorizeUpgrade modifier)
     
     TODO - check if Namespaced Storage Layout is used (ERC7201) -> if not check if there are storage __gap
         assembly block with slot + keccak
@@ -100,8 +97,8 @@ def check_constructor(name, ct):
 
 def check_initializers(ct):
     """
-    Checks that init functions have a modifier. If not, an attacker could:
-        -  re-initialize the contract
+    Checks that init functions (initialize, reinitialize) have a modifier. If not, an attacker could:
+        -  re-initialize the state of the contract through initialize or reinitialize
     """
     for func in ct.functions.keys():
         f = ct.functions[func]
@@ -252,7 +249,7 @@ def check_erc7201_storage(sc, binfo):
             todo("search in all imports of the contract")
                                   
     print(erc7201_storages)
-    code.interact(local=locals())
+    #code.interact(local=locals())
 
 
 def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
@@ -272,23 +269,20 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
     storageLayout2 = get_contract_storage(sc2, binfo2)
 
     if storageLayout1 == None and storageLayout2 == None:
-        info("ERC7201")
-        """
-        1/ find a pattern that identifiers ERC7201
-        2/ get the structure which is associated to the pattern
-        3/ compare slot of the struct
-        """
-        check_erc7201_storage(sc1, binfo1)
+        info("TODO IMPLEM FOR ERC7201")
+        #check_erc7201_storage(sc1, binfo1)
 
     if storageLayout1 is None or storageLayout2 is None:
         error(f"One of the artefact files is not in the correct format")
+        error(f"There is maybe no storage in one of the contracts!")
+        error("How-to build contracts to have storageLayout")
         error(f"- with foundry")
         error("\tforge build --evm-version cancun --extra-output storageLayout")
         error(f"- with hardhat")
         error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
         error(f"It could also be that the contract uses ERC7201")
         return
-    #code.interact(local=locals())
+
     compare_storage_slots(storageLayout1, storageLayout2)
 
 
@@ -316,8 +310,7 @@ def display_slots(sl):
         info("The contract has no storage variables")
     else:
         for storage in sl['storage']:
-            #ode.interact(local=locals())
-            info(f"{storage['type']} {storage['label']} @ slot{storage['slot']}")
+            info(f"\t{storage['type']} {storage['label']} @ slot{storage['slot']}")
 
 def display_all_storage(name, fp):
     """
@@ -333,7 +326,7 @@ def display_all_storage(name, fp):
         error(f"- with hardhat")
         error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
         exit(1)
-    
+    info(f"[{name}] storage slots:")
     display_slots(storageLayout)
 
 
@@ -563,7 +556,7 @@ check_all_initialize_functions_are_called(args.sc1, args.fp_binfo1)
 check_for_dangerous_opcodes(args.sc1, args.fp_binfo1)
 
 """
-When we have twp contracts then do the diffing
+When we have two contracts then do the diffing
 - storage collision check
 - function classhing check
 """
