@@ -1,11 +1,9 @@
 import sys
-import pprint
 import code
 import os
 import json
 import sha3
 import argparse
-from pprint import pprint 
 
 from solidity_parser import parser
 
