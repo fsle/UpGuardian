@@ -578,10 +578,10 @@ def UUPSChecks(name, build_info_fp):
 
 arg_parser = argparse.ArgumentParser(description="Upgrade Guardian (tool to facilitate upgradeability checks on smart contracts)")
 arg_parser.add_argument("--sc1", "--contract-name1", action="store", dest="sc1", help="Contract 1 name to analyze", required=True)
-arg_parser.add_argument("--sc2", "--contract-name2", action="store", dest="sc2", help="Contract 2 name to analyze", required=True)
+arg_parser.add_argument("--sc2", "--contract-name2", action="store", dest="sc2", help="Contract 2 name to analyze")
 
 
-arg_parser.add_argument("--dbg1", "--build-info1", action="store", dest='fp_binfo1', help="File path of the debug info of the 1st smart contract")
+arg_parser.add_argument("--dbg1", "--build-info1", action="store", dest='fp_binfo1', help="File path of the debug info of the 1st smart contract", required=True)
 arg_parser.add_argument("--dbg2", "--build-info2", action="store", dest='fp_binfo2', help="File path of the debug info of the 2nd smart contract")
 
 arg_parser.add_argument("--ds", "--display-storage", action="store_true", dest='display_storage', help="Display storage of submitted contract")
