@@ -62,7 +62,7 @@ def is_contract_interface(name, binfo):
 
 
 def get_source_unit(contract):
-    return parser.parse(contract, start="sourceUnit", loc=False, strict=False)
+    return parser.parse(contract, start="sourceUnit", loc=True, strict=False)
 
 
 
@@ -111,7 +111,7 @@ def get_functions_sigs_from_artefact(name, build_info_fp):
 def checks_fps(fps):
     ret = True
     for fp in fps:
-        if not os.path.exists(fp):
+        if fp is not None and not os.path.exists(fp):
             ret = False
     return ret
 
