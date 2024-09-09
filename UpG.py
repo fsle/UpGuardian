@@ -11,6 +11,7 @@ from solidity_parser import parser
 from utils import get_contract_storage, get_contract_content, is_contract_interface, get_source_unit_object, get_source_unit
 from utils import has_function_only_one_return_val, get_function_return_first_type
 from utils import compute_function_sighash, get_functions_sigs_from_artefact
+from utils import checks_fps
 from utils import warning, todo, error, good, info
 
 """
@@ -191,6 +192,45 @@ def compare_storage_slots(sl1, sl2):
             error(f"Added in Storage2 -> {display_storage_data(sl2['storage'][i])}")
             continue
 
+def display_structure_field_erc7201(st, i):
+    info(f"{st['structure']['members'][i]['typeName']['name']} {st['structure']['members'][i]['name']}")
+
+
+def compare_structs(s1, s2):
+    """
+    comparing two structs
+    """
+    for i in len(s1['structure']['members']): 
+        if i > len(s2['structure']['members']):
+            error("A field has been removed from Storage2")
+            display_structure_field_erc7201(s1,i)
+        m1 = s1['structure']['members'][i]
+        m2 = s2['structure']['members'][i]
+        
+        if m1['name'] != m2['name']:
+            error("Structure field name changed")
+            error(f"{m1['name']} ---> {m2['name']}")
+
+        if m1['typeName']['name'] != m2['typeName']['name']:
+            error("Structure field type changed")
+            error(f"{m1['typeName']['name']} ---> {m2['typeName']['name']}")
+            todo("Check if the storage type change could lead to unwanted side effects")
+    if len(s2['structure']['members']) > len(s1['structure']['members']):
+        error("Structure2 has new fields")
+        for i in range(len(s1['structure']['members'], len(sl2['structure']['members']))):
+            display_storage_data(s2['structure']['members'], i)
+
+    
+def compare_storage_slots_erc7201(sl1, sl2):
+    """
+    Compares two structures store usig ERC7201 standard
+    """
+    for k in sl1.keys():
+        if k in sl2.keys():
+            info(f"Same storage detected -> {k}")
+            compare_structs(sl1[k], sl2[k])
+        else:
+            error(f"{k} removed from storage slots")
 
 def get_structure_members(sU, name):
     """
@@ -203,7 +243,7 @@ def get_structure_members(sU, name):
             break
     return struct_def
 
-def check_erc7201_storage(sc, binfo):
+def get_erc7201_storage(sc, binfo):
     """
     Still in dev ....
     Finds a ERC7201 struct and checks for collision with a new version of the contract
@@ -247,9 +287,7 @@ def check_erc7201_storage(sc, binfo):
         else:
             #we have to research in all imported files :o  
             todo("search in all imports of the contract")
-                                  
-    print(erc7201_storages)
-    #code.interact(local=locals())
+    return erc7201_storages
 
 
 def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
@@ -268,9 +306,12 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
     storageLayout1 = get_contract_storage(sc1, binfo1)
     storageLayout2 = get_contract_storage(sc2, binfo2)
 
+    #ERC7201 checks
     if storageLayout1 == None and storageLayout2 == None:
-        info("TODO IMPLEM FOR ERC7201")
-        #check_erc7201_storage(sc1, binfo1)
+        storageLayout1 = get_erc7201_storage(sc1, binfo1)
+        storageLayout2 = get_erc7201_storage(sc2, binfo2)
+        compare_storage_slots_erc7201(storageLayout1, storageLayout2)
+        return
 
     if storageLayout1 is None or storageLayout2 is None:
         error(f"One of the artefact files is not in the correct format")
@@ -549,6 +590,10 @@ arg_parser.add_argument("--ds", "--display-storage", action="store_true", dest='
 
 args = arg_parser.parse_args()
 
+
+if not checks_fps([args.fp_binfo1, args.fp_binfo2]):
+    error("Check build info file filepaths.")
+    exit(1)
 
 UUPSChecks(args.sc1, args.fp_binfo1)
 

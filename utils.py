@@ -108,6 +108,13 @@ def get_functions_sigs_from_artefact(name, build_info_fp):
             sigs.append(signature)
     return sigs
 
+def checks_fps(fps):
+    ret = True
+    for fp in fps:
+        if not os.path.exists(fp):
+            ret = False
+    return ret
+
 def warning(text):
     out = colored(text, "red", attrs=["reverse", "blink"])
     print(out)
