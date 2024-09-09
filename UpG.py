@@ -100,6 +100,8 @@ def check_initializers(ct):
     Checks that init functions (initialize, reinitialize) have a modifier. If not, an attacker could:
         -  re-initialize the state of the contract through initialize or reinitialize
     """
+    print("-"*100)
+    info("Initialize funcs check")
     for func in ct.functions.keys():
         f = ct.functions[func]
         modifs = f._node.modifiers
@@ -121,6 +123,8 @@ def upgrade_access_control(ct):
     Checks that the _authorizeUpgrade function has a modifier that restricts its access.
     If not, an attacker could upgrade the contract and change its implementation.
     """
+    print("-"*100)
+    info("Upgrade access control check")
     for func in ct.functions.keys():
         f = ct.functions[func]
         modifs = f._node.modifiers
@@ -324,6 +328,7 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
         - it could collide between the two versions of two implementations
         - it could collide between the proxy and the implementation
     """
+    print("-"*100)
     info("[Storage collision]")
     binfo1 = json.loads(open(build_info_fp1, 'r').read())
     binfo2 = json.loads(open(build_info_fp2, 'r').read())
@@ -424,11 +429,10 @@ def get_contract_initfuncs(inheritanceMap={}, name="", binfo="", depth=0):
         - handle unchained (brings more complexity if called (parent contract init should be manually called aswell))
     """
     #print(f"[NAME] --------> {name} / depth = {depth} / inheritanceMap {list(inheritanceMap.keys())}")
-    ct_content = get_contract_content(name, binfo)
-    sU = parser.parse(ct_content, loc=True)
+    sU = get_source_unit(name, binfo)
     for node in sU.children:
         #visiting contracts definition that are not interfaces
-        if node.type == "ContractDefinition" and not is_contract_interface(node.name, binfo):
+        if node.type == "ContractDefinition": # and not is_contract_interface(node.name, binfo):
             contractName = node.name
             baseContracts = []
             content = {'init_funcs': {}, 'baseContracts': baseContracts, 'depth': depth}
@@ -453,8 +457,8 @@ def get_contract_initfuncs(inheritanceMap={}, name="", binfo="", depth=0):
             #Visit all baseContracts (parents/inherited contracts) recursively
             for base in node.baseContracts:
                 #we don't care about interfaces
-                if(is_contract_interface(base.baseName.namePath, binfo)):
-                    continue
+                #if(is_contract_interface(base.baseName.namePath, binfo)):
+                #    continue
                 
                 inheritanceMap[contractName]['baseContracts'].append(base.baseName.namePath)
 
@@ -484,9 +488,10 @@ def check_all_initialize_functions_are_called(name, build_info_fp):
             - if never invoked -> it is maybe the round initializer function
             - if invoked more than once can be problematic -> explain why
     """
+    print("-"*100)
+    info("Initialization functions call check")
     binfo =  json.loads(open(build_info_fp, 'r').read())
     inheritanceMap = get_contract_initfuncs(name=name, binfo=binfo)
-    print("-"*100)
     for ct_name in inheritanceMap.keys():
         function_calls = []
         print(f"[{ct_name}]")
@@ -565,12 +570,12 @@ def check_if_contract_has_dangerous_opcodes(name, binfo="", visited_contracts=[]
     ct_content = get_contract_content(name, binfo)
     sU = parser.parse(ct_content, loc=True)
     for node in sU.children:
-        if node.type == "ContractDefinition" and not is_contract_interface(node.name, binfo):
+        if node.type == "ContractDefinition": # and not is_contract_interface(node.name, binfo):
             if node.name in visited_contracts:
-                print(f"{node.name} is already processed")
+                #print(f"{node.name} is already processed")
                 continue
             visited_contracts.append(node.name)
-            print(f"{"\t"*(depth)}[{node.name}]")
+            #print(f"{"\t"*(depth)}[{node.name}]")
             for sn in node.subNodes:
                 #print(sn.type)
                 if sn.type == 'FunctionDefinition' and not sn.isConstructor:
@@ -580,13 +585,15 @@ def check_if_contract_has_dangerous_opcodes(name, binfo="", visited_contracts=[]
                         todo("verify that this call cannot lead to destruction of the proxy contrat")
             
             for base in node.baseContracts:
-                if is_contract_interface(base.baseName.namePath, binfo):
-                    continue
+                #if is_contract_interface(base.baseName.namePath, binfo):
+                #    continue
                 visited_contracts = check_if_contract_has_dangerous_opcodes(base.baseName.namePath, binfo, visited_contracts)
     return visited_contracts
      
 
 def check_for_dangerous_opcodes(name, build_info_fp):
+    print("-"*100)
+    info("Dangerous opcodes check")
     binfo =  json.loads(open(build_info_fp, 'r').read())
     check_if_contract_has_dangerous_opcodes(name, binfo)   
 

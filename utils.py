@@ -61,15 +61,15 @@ def is_contract_interface(name, binfo):
     return ret
 
 
-def get_source_unit(contract):
+def get_source_unit(name, binfo):
+    contract = get_contract_content(name, binfo)
     return parser.parse(contract, start="sourceUnit", loc=True, strict=False)
 
 
 
 def get_source_unit_object(name, binfo):
     sUO = None
-    contract = get_contract_content(name, binfo)
-    sourceUnit = get_source_unit(contract)
+    sourceUnit = get_source_unit(name, binfo)
     sUO = parser.objectify(sourceUnit)
     return sUO
 
