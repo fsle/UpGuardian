@@ -195,26 +195,52 @@ def compare_storage_slots(sl1, sl2):
 def display_structure_field_erc7201(st, i):
     info(f"{st['structure']['members'][i]['typeName']['name']} {st['structure']['members'][i]['name']}")
 
+def get_struct_field_type(m):
+    if 'name' in m['typeName'].keys():
+        return m['typeName']['name']
+    elif 'valueType' in m['typeName'].keys():
+        return m['typeName']['valueType']['namePath']
+    elif 'baseTypeName' in m['typeName'].keys():
+        return m['typeName']['baseTypeName']['name']
+    else:
+        error("Could not handle member type definition")
+        code.interact(local=locals())
 
 def compare_structs(s1, s2):
     """
     comparing two structs
     """
-    for i in len(s1['structure']['members']): 
+    changes = 0
+    if s1['structure']['name'] != s2['structure']['name']:
+        error("Structure name changed")
+        info(f"{s1['name']} -> {s2['name']}")
+        changes += 1
+    for i in range(len(s1['structure']['members'])): 
         if i > len(s2['structure']['members']):
             error("A field has been removed from Storage2")
             display_structure_field_erc7201(s1,i)
+            changes += 1
+            continue
         m1 = s1['structure']['members'][i]
         m2 = s2['structure']['members'][i]
         
+        t1 = get_struct_field_type(s1['structure']['members'][i])
+        t2 = get_struct_field_type(s2['structure']['members'][i])
+
         if m1['name'] != m2['name']:
             error("Structure field name changed")
             error(f"{m1['name']} ---> {m2['name']}")
-
-        if m1['typeName']['name'] != m2['typeName']['name']:
+            changes+=1
+            continue
+        if t1 != t2:
             error("Structure field type changed")
-            error(f"{m1['typeName']['name']} ---> {m2['typeName']['name']}")
+            error(f"{t1} ---> {t2}")
             todo("Check if the storage type change could lead to unwanted side effects")
+            changes +=1
+
+    if changes == 0:
+        good("No changes between the two contracts on storage (name or type)")
+    
     if len(s2['structure']['members']) > len(s1['structure']['members']):
         error("Structure2 has new fields")
         for i in range(len(s1['structure']['members'], len(sl2['structure']['members']))):
