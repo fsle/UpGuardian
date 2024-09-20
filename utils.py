@@ -90,15 +90,9 @@ def compute_function_sighash(sig):
     k.update(bytes(sig, 'ascii'))
     return k.hexdigest()[0:8]
 
-def get_abi_from_artefact(name, fp):
-    abi = None
-    binfo = json.loads(open(fp,'r').read())
+
+def get_functions_sigs_from_artefact(name, binfo):
     abi = get_contract_abi(name, binfo)
-    return abi
-
-
-def get_functions_sigs_from_artefact(name, build_info_fp):
-    abi = get_abi_from_artefact(name, build_info_fp)
     sigs = []
     for item in abi:
         if item['type'] == 'function':
@@ -108,12 +102,20 @@ def get_functions_sigs_from_artefact(name, build_info_fp):
             sigs.append(signature)
     return sigs
 
-def checks_fps(fps):
-    ret = True
-    for fp in fps:
-        if fp is not None and not os.path.exists(fp):
-            ret = False
-    return ret
+def is_file_dbginfo(fp):
+    if fp is None:
+        return False
+    if not os.path.exists(fp):
+        return False
+    binfo = None
+    try:
+        binfo = json.loads(open(fp,'r').read())
+    except Exception as e:
+        print(e)
+        return False
+    if 'output' not in binfo.keys():
+        return False
+    return True
 
 def warning(text):
     out = colored(text, "red", attrs=["reverse", "blink"])

@@ -11,7 +11,7 @@ from solidity_parser import parser
 from utils import get_contract_storage, get_contract_content, is_contract_interface, get_source_unit_object, get_source_unit
 from utils import has_function_only_one_return_val, get_function_return_first_type
 from utils import compute_function_sighash, get_functions_sigs_from_artefact
-from utils import checks_fps
+from utils import is_file_dbginfo 
 from utils import warning, todo, error, good, info
 
 """
@@ -319,7 +319,7 @@ def get_erc7201_storage(sc, binfo):
     return erc7201_storages
 
 
-def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
+def storage_collision_check(sc1, binfo1, sc2, binfo2):
     """
     Checks collision of storage between:
         - two versions of implementation
@@ -330,8 +330,6 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
     """
     print("-"*100)
     info("[Storage collision]")
-    binfo1 = json.loads(open(build_info_fp1, 'r').read())
-    binfo2 = json.loads(open(build_info_fp2, 'r').read())
 
     storageLayout1 = get_contract_storage(sc1, binfo1)
     storageLayout2 = get_contract_storage(sc2, binfo2)
@@ -344,11 +342,11 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
         return
 
     if storageLayout1 is None or storageLayout2 is None:
-        error(f"One of the artefact files is not in the correct format")
+        error(f"Debug-info file does not contain the storageLayout")
         error(f"There is maybe no storage in one of the contracts!")
         error("How-to build contracts to have storageLayout")
         error(f"- with foundry")
-        error("\tforge build --evm-version cancun --extra-output storageLayout")
+        error("\tforge build --build-info --evm-version cancun --extra-output storageLayout")
         error(f"- with hardhat")
         error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
         error(f"It could also be that the contract uses ERC7201")
@@ -357,12 +355,12 @@ def storage_collision_check(sc1, build_info_fp1, sc2, build_info_fp2):
     compare_storage_slots(storageLayout1, storageLayout2)
 
 
-def function_clashing(sc1, build_info_fp1, sc2, build_info_fp2):
+def function_clashing(sc1, binfo1, sc2, binfo2):
     """
     Checks for function clashing between proxy and implementation
     """
-    fsig1 = get_functions_sigs_from_artefact(sc1, build_info_fp1)
-    fsig2 = get_functions_sigs_from_artefact(sc2, build_info_fp2)
+    fsig1 = get_functions_sigs_from_artefact(sc1, binfo1)
+    fsig2 = get_functions_sigs_from_artefact(sc2, binfo2)
 
     sighash1 = {}
     sighash2 = {}
@@ -383,11 +381,11 @@ def display_slots(sl):
         for storage in sl['storage']:
             info(f"\t{storage['type']} {storage['label']} @ slot{storage['slot']}")
 
-def display_all_storage(name, fp):
+def display_all_storage(name, binfo):
     """
     Displays all storage data of the given artefact
     """
-    binfo = json.loads(open(fp, 'r').read())
+    print("-"*100)
     storageLayout = get_contract_storage(name, binfo)
     
     if storageLayout is None:
@@ -472,7 +470,7 @@ def get_contract_initfuncs(inheritanceMap={}, name="", binfo="", depth=0):
     return inheritanceMap
 
 
-def check_all_initialize_functions_are_called(name, build_info_fp):
+def check_all_initialize_functions_are_called(name, binfo):
     """
     Checks that all initialize function are called in other initializers
     ex: initialize -> __RentrancyGuard_init() -> __Reentrancy_init_unchained()
@@ -490,7 +488,6 @@ def check_all_initialize_functions_are_called(name, build_info_fp):
     """
     print("-"*100)
     info("Initialization functions call check")
-    binfo =  json.loads(open(build_info_fp, 'r').read())
     inheritanceMap = get_contract_initfuncs(name=name, binfo=binfo)
     for ct_name in inheritanceMap.keys():
         function_calls = []
@@ -591,15 +588,13 @@ def check_if_contract_has_dangerous_opcodes(name, binfo="", visited_contracts=[]
     return visited_contracts
      
 
-def check_for_dangerous_opcodes(name, build_info_fp):
+def check_for_dangerous_opcodes(name, binfo):
     print("-"*100)
     info("Dangerous opcodes check")
-    binfo =  json.loads(open(build_info_fp, 'r').read())
     check_if_contract_has_dangerous_opcodes(name, binfo)   
 
 
-def UUPSChecks(name, build_info_fp):
-    binfo = json.loads(open(build_info_fp, 'r').read())
+def UUPSChecks(name, binfo):
     sUO = get_source_unit_object(name, binfo)
 
     check_constructor(name, sUO.contracts[name])
@@ -623,14 +618,16 @@ arg_parser.add_argument("--ds", "--display-storage", action="store_true", dest='
 args = arg_parser.parse_args()
 
 
-if not checks_fps([args.fp_binfo1, args.fp_binfo2]):
-    error("Check build info file filepaths.")
+if not is_file_dbginfo(args.fp_binfo1):
+    error(f"{args.fp_binfo1} is not a valid build-info file")
     exit(1)
 
-UUPSChecks(args.sc1, args.fp_binfo1)
+args.binfo1 = json.loads(open(args.fp_binfo1, 'r').read())
 
-check_all_initialize_functions_are_called(args.sc1, args.fp_binfo1)
-check_for_dangerous_opcodes(args.sc1, args.fp_binfo1)
+UUPSChecks(args.sc1, args.binfo1)
+
+check_all_initialize_functions_are_called(args.sc1, args.binfo1)
+check_for_dangerous_opcodes(args.sc1, args.binfo1)
 
 """
 When we have two contracts then do the
@@ -638,8 +635,12 @@ When we have two contracts then do the
 - function classhing check
 """
 if args.sc2 != None and args.fp_binfo2 != None:
-    storage_collision_check(args.sc1, args.fp_binfo1, args.sc2, args.fp_binfo2)
-    function_clashing(args.sc1, args.fp_binfo1, args.sc2, args.fp_binfo2)
+    if not is_file_dbginfo(args.fp_binfo2):
+        error(f"{args.fp_binfo2} is not a valid build-info file")
+        exit(1)
+    args.binfo2 = json.loads(open(args.fp_binfo2, 'r').read())
+    storage_collision_check(args.sc1, args.binfo1, args.sc2, args.binfo2)
+    function_clashing(args.sc1, args.binfo1, args.sc2, args.binfo2)
 
 
 
@@ -648,6 +649,6 @@ display storage when source + storageLayout
 """
 if args.display_storage:
     if args.fp_binfo1:
-        display_all_storage(args.sc1, args.fp_binfo1)
+        display_all_storage(args.sc1, args.binfo1)
     if args.fp_binfo2:
-        display_all_storage(args.sc2, args.fp_binfo2)
+        display_all_storage(args.sc2, args.binfo2)
