@@ -34,6 +34,7 @@ Upgrade Guardian:
     - check for storage changes (implem v1 vs v2)
     - check for storage clash (proxy vs implementation)
     - handle ERC7201 (structures changes)
+        - TODO - try to find ERC7201 storages even if classical storage is used 
 
     - check for function clashing between proxy and implmentation
     - check that all initializer are called in main contract (and not more than once)
@@ -42,7 +43,6 @@ Upgrade Guardian:
 4. make security checks (for TTP)
     TODO - watch out about admin and not admin functionalities
 
-TODO - add check for storage gaps ?
 TODO:
 1. online check, is initialized
     - uninitialized implem contract (https://medium.com/immunefi/wormhole-uninitialized-proxy-bugfix-review-90250c41a43a)
@@ -125,6 +125,7 @@ def upgrade_access_control(ct):
     """
     print("-"*100)
     info("Upgrade access control check")
+    foundAuthorizeFunc = False
     for func in ct.functions.keys():
         f = ct.functions[func]
         modifs = f._node.modifiers
@@ -132,6 +133,7 @@ def upgrade_access_control(ct):
         hasAccessControl = False
         if '_authorizeUpgrade' in f._node.name:
             isUpgradeFunction = True
+            foundAuthorizeFunc = True
             for m in modifs:
                 if 'only' in m.name:
                     hasAccessControl = True
@@ -143,6 +145,8 @@ def upgrade_access_control(ct):
             todo("\tCheck if the following modifiers restrict access to the upgrade")
             for m in m.name:
                 todo(f"\t{m.name}")
+    if not foundAuthorizeFunc:
+        warning(f"{ct.name} has not '_authorizeUpgrade' func, this contract may use TPS upgrade pattern")
 
 
 def check_for_immutables(ct):
