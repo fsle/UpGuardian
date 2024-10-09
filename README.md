@@ -36,7 +36,7 @@ forge build --evm-version cancun --extra-output storageLayout --build-info
 ```
 
 #### Hardhat
--> In solidity.settings : outputSelection: { '*': { '*': ['storageLayout'] } },
+-> In solidity.settings : `outputSelection: { '*': { '*': ['storageLayout'] } },`
 ```
 npx hardhat compile 
 ```
@@ -94,8 +94,6 @@ Types of proxy:
 - UUPS (contains an initialize function, delegates upgrade to implem contract)
 - metamorphic contracts (selfdestruct + redeploy)
 - diamond proxy (diamond, facet, loupe)
-
-
 
 
 ## Helper
