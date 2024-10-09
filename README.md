@@ -1,11 +1,15 @@
 # UpGuardian
 
+## What is it ?
+- An helper for auditors to check upgradeability vulnerabilities (automatic checks and reminders)
+- A monitoring tool to verify that new deployed contracts wont affect smart contract's security
+
 
 ## Installation
 
 - Create a virtualenv (to not mess up your whole python setup)
 - Install python dependencies 
-- Clone, patch and install a `solidity_parser` fork repo (it supports `immutable` keyword and patch reduces errors verbosity)
+- Clone, patch and install a `solidity_parser` fork repo (it supports `immutable` keyword and a patch reduces errors verbosity)
 
 ```bash
 mkvirtualenv upg
@@ -17,6 +21,39 @@ git apply ../../less_verbose.patch
 pip3 install .
 ```
 
+## Usage requirement
+
+The tool needs two types of argument:
+- the contract name
+- the build-info file
+
+
+The build info file is created during the project's compilation and is the angular file used in the tool. Here are a few tips to have storage details depending on the dev env.
+
+#### Forge / Foundry
+```
+forge build --evm-version cancun --extra-output storageLayout --build-info
+```
+
+#### Hardhat
+-> In solidity.settings : outputSelection: { '*': { '*': ['storageLayout'] } },
+```
+npx hardhat compile 
+```
+
+- example json content
+```json
+"storageLayout":{"storage":[{"astId":49271,"contract":"src/UUPS_selfdestruct/SimpleToken.sol:SimpleToken","label":"lol","offset":0,"slot":"0","type":"t_address"}],"types":{"t_address":{"encoding":"inplace","label":"address","numberOfBytes":"20"}}}
+```
+
+## Usage
+
+The tool can currently be use in two mode:
+- standalone contract: that checks upgradeability related risks on the specified contract
+- dual contract: standalone mode with more checks (function and storage clashing between the two contracts) 
+```
+python3 UpG.py --sc1 <contractName1> --dbg1 <path-to-debug-file1> --sc2 <contractName2> --dbg2 <path-to-debug-file2>
+```
 
 ## URLs / Ressources
 - python wrapper of antlr4 solidity language parsing
@@ -24,9 +61,6 @@ https://github.com/Consensys/python-solidity-parser
 
 - fork ahead supporting immutables
 https://github.com/Caglankaan/python-solidity-parser
-```
-pip3 install .
-```
 
 - solidity doc to gen storageLayout when compiling
 https://docs.soliditylang.org/en/latest/using-the-compiler.html#input-description
@@ -61,9 +95,7 @@ Types of proxy:
 - metamorphic contracts (selfdestruct + redeploy)
 - diamond proxy (diamond, facet, loupe)
 
-## What is it ?
-- An helper for auditors to check upgradeability vulnerabilities (automatic checks and reminders);
-- A monitoring tool to verify that new deployed contracts wont affect smart contract's security
+
 
 
 ## Helper
@@ -121,21 +153,6 @@ https://docs.openzeppelin.com/upgrades-plugins/1.x/faq#why-cant-i-use-immutable-
     - ERC165 inheritance ?
     - fallback of delegatecalls()
     - uninitialized state variable
-
-### Tip: getting storageLayout depending on the dev environement
-
-#### Forge / Foundry
-forge build --evm-version cancun --extra-output storageLayout --build-info
-
---> build-info/x.json contains all sources
-
-- example json content
-```json
-"storageLayout":{"storage":[{"astId":49271,"contract":"src/UUPS_selfdestruct/SimpleToken.sol:SimpleToken","label":"lol","offset":0,"slot":"0","type":"t_address"}],"types":{"t_address":{"encoding":"inplace","label":"address","numberOfBytes":"20"}}}
-```
-
-#### Hardhat
-npx hardhat compile -> In solidity.settings : outputSelection: { '*': { '*': ['storageLayout'] } },
 
 
 
