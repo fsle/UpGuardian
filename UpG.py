@@ -146,7 +146,7 @@ def upgrade_access_control(ct):
             for m in m.name:
                 todo(f"\t{m.name}")
     if not foundAuthorizeFunc:
-        warning(f"{ct.name} has not '_authorizeUpgrade' func, this contract may use TPS upgrade pattern")
+        warning(f"{ct.name} has not '_authorizeUpgrade' func, this contract may use Transparent Proxy upgrade pattern")
 
 
 def check_for_immutables(ct):
@@ -363,6 +363,9 @@ def function_clashing(sc1, binfo1, sc2, binfo2):
     """
     Checks for function clashing between proxy and implementation
     """
+    print("-"*100)
+    info("[Function collision]")
+
     fsig1 = get_functions_sigs_from_artefact(sc1, binfo1)
     fsig2 = get_functions_sigs_from_artefact(sc2, binfo2)
 
