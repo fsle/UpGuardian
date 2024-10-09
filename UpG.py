@@ -21,7 +21,7 @@ Upgrade Guardian:
     - parses AST from source(s)
     - loads json build info files
 
-2. detects upgreadeability (UUPS vs TTP) (TODO)
+2. detects upgreadeability (UUPS vs TTP) (currently only based on the presence or not of authorizeUpgrade)
 
 3. make security checks (for UUPS)
     - if UUPS upgrade logic is in implementation
@@ -250,7 +250,7 @@ def compare_structs(s1, s2):
     
     if len(s2['structure']['members']) > len(s1['structure']['members']):
         error("Structure2 has new fields")
-        for i in range(len(s1['structure']['members'], len(sl2['structure']['members']))):
+        for i in range(len(s1['structure']['members'], len(s2['structure']['members']))):
             display_storage_data(s2['structure']['members'], i)
 
     
@@ -425,8 +425,6 @@ def get_contract_content_from_debug_info(name, debug_info):
     return content
 
     
-
-
 def get_contract_initfuncs(inheritanceMap={}, name="", binfo="", depth=0):
     """
     Visit the contract and builds an inheritanceMap obj that contains every contracts init funcs
