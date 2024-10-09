@@ -1,0 +1,15 @@
+diff --git a/solidity_parser/parser.py b/solidity_parser/parser.py
+index 078cd40..97657c5 100644
+--- a/solidity_parser/parser.py
++++ b/solidity_parser/parser.py
+@@ -1012,8 +1012,8 @@ class AstVisitor(SolidityVisitor):
+                 names = self.visit(names.assemblyIdentifierList().identifier())
+         except Exception as e:
+             names = []
+-            logger.warning("Exception occured on visitAssemblyLocalDefinition. E "+ str(e))
+-            traceback.print_exc()
++            #logger.warning("Exception occured on visitAssemblyLocalDefinition. E "+ str(e))
++            #traceback.print_exc()
+ 
+         return Node(ctx=ctx,
+                     type='AssemblyAssignment',
