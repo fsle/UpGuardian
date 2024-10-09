@@ -3,12 +3,18 @@
 
 ## Installation
 
-- Install the following fork of the main `solidity_parser` repo. It supports `immutable` keyword:
-
-https://github.com/Caglankaan/python-solidity-parser
+- Create a virtualenv (to not mess up your whole python setup)
+- Install python dependencies 
+- Clone, patch and install a `solidity_parser` fork repo (it supports `immutable` keyword and patch reduces errors verbosity)
 
 ```bash
-pip3 installl -r requirements.txt
+mkvirtualenv upg
+pip3 install -r requirements.txt
+git clone https://github.com/Caglankaan/python-solidity-parser
+cd python-solidity-parser/
+git checkout ffde787b63c02f7b107729ce80b1d243febf8531
+git apply ../../less_verbose.patch
+pip3 install .
 ```
 
 
