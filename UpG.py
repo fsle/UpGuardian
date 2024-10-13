@@ -99,6 +99,8 @@ def check_initializers(ct):
     """
     Checks that init functions (initialize, reinitialize) have a modifier. If not, an attacker could:
         -  re-initialize the state of the contract through initialize or reinitialize
+    TODO: 
+        - Find top calling function (initialize / reinitialize) that are not called for instance from check_all_initialize_functions_are_called and check if they are restricted
     """
     print("-"*100)
     info("Initialize funcs check")
@@ -156,6 +158,8 @@ def check_for_immutables(ct):
     However, in some cases immutable variables are upgrade safe.
     this can be used to bypass oz warning -> //@custom:oz-upgrades-unsafe-allow state-variable-immutable
     """
+    print("-"*100)
+    info("Immutables checks")
     for var_name in ct.stateVars.keys():
         var = ct.stateVars[var_name]
         if var.isDeclaredImmutable:
@@ -174,6 +178,9 @@ def compare_storage_slots(sl1, sl2):
     sl1 is supposed to be the first implementation version or the proxy
     sl2 is supposed to be the second implem or the implementation
     """
+    #If there are no storages in the contracts, let's skip this func
+    if sl1 == sl2 == None:
+        return
     changes = 0
     for i in range(len(sl1['storage'])):
         if i > len(sl2['storage']):
@@ -200,7 +207,15 @@ def compare_storage_slots(sl1, sl2):
             continue
 
 def display_structure_field_erc7201(st, i):
-    info(f"{st['structure']['members'][i]['typeName']['name']} {st['structure']['members'][i]['name']}")
+    typeName = ""
+    #handling various types declaration
+    if 'valueType' in st['structure']['members'][i]['typeName']:
+        typeName = st['structure']['members'][i]['typeName']['valueType']['namePath']
+    elif 'baseTypeName' in st['structure']['members'][i]['typeName']:
+        typeName = st['structure']['members'][i]['typeName']['baseTypeName']['name']
+    else:
+        typeName = st['structure']['members'][i]['typeName']['name']
+    info(f"\t{typeName} {st['structure']['members'][i]['name']}")
 
 def get_struct_field_type(m):
     if 'name' in m['typeName'].keys():
@@ -258,6 +273,9 @@ def compare_storage_slots_erc7201(sl1, sl2):
     """
     Compares two structures store usig ERC7201 standard
     """
+    ##If there are no storages in the contracts, let's skip this func
+    if sl1 == sl2 == {}:
+        return
     for k in sl1.keys():
         if k in sl2.keys():
             info(f"Same storage detected -> {k}")
@@ -276,7 +294,7 @@ def get_structure_members(sU, name):
             break
     return struct_def
 
-def get_erc7201_storage(sc, binfo):
+def get_erc7201_storage(sc, binfo, visited=[], depth=0):
     """
     Still in dev ....
     Finds a ERC7201 struct and checks for collision with a new version of the contract
@@ -287,40 +305,62 @@ def get_erc7201_storage(sc, binfo):
     3/ get return type
     4/ find structure declaration / members
     5/ same for other file and compare structure
+    TODO: this should be done recursively in all baseContracts (inherited) of the given one
     """
+    visited.append(sc)
     sUO = get_source_unit_object(sc, binfo)
     ct = sUO.contracts[sc]
-
     erc7201_storages = {}
+    
+    #get all bytes32 variables in the current contract
     for sv in ct.stateVars:
-        if ct.stateVars[sv].typeName.name == 'bytes32':
-            #code.interact(local=locals())
+        if 'name' in ct.stateVars[sv].typeName.keys() and ct.stateVars[sv].typeName.name == 'bytes32':
             b32_val = ct.stateVars[sv].expression.number
-            erc7201_storages[b32_val] = {'name': sv}
+            erc7201_storages[b32_val] = {'name': sv, 'contract': sc, 'depth': depth}
    
     for f in ct.functions:
         # we look for functions with storage in their name and that are pure (does not change the state)
         # this is maybe too strict
-        if "storage" in f or "Storage" in f and ct.functions[f].stateMutability == 'pure':
+        if "storage" in f or "Storage" in f and ct.functions[f].stateMutability in ['pure']:
             node = ct.functions[f]._node
             for stat in node.body.statements:
                 if stat.type == 'InLineAssemblyStatement' and stat.body.type == 'AssemblyBlock':
                     #build info json does not contain enough info
                     for erc7021_stor in erc7201_storages.keys():
-                        if erc7201_storages[erc7021_stor]['name'] in str(stat.body.operations): #forgive me, this is ugly
+                        #forgive me, this is ugly: if the bytes32 variable name is used in this function this is probably the sslot getter of this structure
+                        if erc7201_storages[erc7021_stor]['name'] in str(stat.body.operations):
                             if has_function_only_one_return_val:
                                 struct_name = get_function_return_first_type(ct.functions[f])
                                 erc7201_storages[erc7021_stor]['structure'] = {'name': struct_name, 'members':[]}
     
-    sU = get_source_unit(get_contract_content(sc, binfo))
-    for erc7021_stor in erc7201_storages.keys():
-        struct_members = get_structure_members(sU, struct_name)
+    sU = get_source_unit(sc, binfo)
+    
+    erc7021_storage_list = list(erc7201_storages.keys())
+
+    for erc7021_stor in erc7021_storage_list:
+        struct_members = []
+        if 'structure' not in erc7201_storages[erc7021_stor].keys():
+            erc7201_storages.pop(erc7021_stor, None)
+            continue
+        if erc7201_storages[erc7021_stor]['structure']['name'] in ct.structs.keys():
+            struct_members = ct.structs[struct_name].members
+        else:
+            struct_members = get_structure_members(sU, struct_name) #if strut is outside contract definition
         if struct_members is not None:
             erc7201_storages[erc7021_stor]['structure']['members'] = struct_members
         else:
-            #we have to research in all imported files :o  
-            todo("search in all imports of the contract")
-    return erc7201_storages
+            #we could not find the structure members for the identified bytes32 struct  
+            error(f"todo: could not find struct members for {erc7201_storages[erc7021_stor]['structure']['name']} ({erc7021_stor})")
+    
+    #loop through all baseContrats researching for potential erc7201 storages
+    depth += 1
+    for bc in  ct._node.baseContracts:
+        if bc.baseName.namePath not in visited:
+            (tmp_visited, tmp_erc7201_storages) =  get_erc7201_storage(bc.baseName.namePath, binfo, visited, depth)
+            visited = list(set(visited + tmp_visited)) #update visited list
+            erc7201_storages.update(tmp_erc7201_storages) #update erc7201 storages
+
+    return (visited, erc7201_storages)
 
 
 def storage_collision_check(sc1, binfo1, sc2, binfo2):
@@ -339,24 +379,23 @@ def storage_collision_check(sc1, binfo1, sc2, binfo2):
     storageLayout2 = get_contract_storage(sc2, binfo2)
 
     #ERC7201 checks
-    if storageLayout1 == None and storageLayout2 == None:
-        storageLayout1 = get_erc7201_storage(sc1, binfo1)
-        storageLayout2 = get_erc7201_storage(sc2, binfo2)
-        compare_storage_slots_erc7201(storageLayout1, storageLayout2)
-        return
-
-    if storageLayout1 is None or storageLayout2 is None:
-        error(f"Debug-info file does not contain the storageLayout")
-        error(f"There is maybe no storage in one of the contracts!")
-        error("How-to build contracts to have storageLayout")
-        error(f"- with foundry")
-        error("\tforge build --build-info --evm-version cancun --extra-output storageLayout")
-        error(f"- with hardhat")
-        error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
-        error(f"It could also be that the contract uses ERC7201")
-        return
+    (_ ,erc7201_storageLayout1) = get_erc7201_storage(sc1, binfo1)
+    (_ ,erc7201_storageLayout2) = get_erc7201_storage(sc2, binfo2)
 
     compare_storage_slots(storageLayout1, storageLayout2)
+    compare_storage_slots_erc7201(erc7201_storageLayout1, erc7201_storageLayout2)
+
+
+    # if storageLayout1 is None or storageLayout2 is None:
+    #     error(f"Debug-info file does not contain the storageLayout")
+    #     error(f"There is maybe no storage in one of the contracts!")
+    #     error("How-to build contracts to have storageLayout")
+    #     error(f"- with foundry")
+    #     error("\tforge build --build-info --evm-version cancun --extra-output storageLayout")
+    #     error(f"- with hardhat")
+    #     error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
+    #     error(f"It could also be that the contract uses ERC7201")
+    #     return
 
 
 def function_clashing(sc1, binfo1, sc2, binfo2):
@@ -388,22 +427,36 @@ def display_slots(sl):
         for storage in sl['storage']:
             info(f"\t{storage['type']} {storage['label']} @ slot{storage['slot']}")
 
+def display_erc7201_slots(sl):
+    for sslot in sl.keys():
+        info(f"{sl[sslot]['contract']}::{sl[sslot]['structure']['name']} @ {sslot}({sl[sslot]['name']})")
+        for i in range(len(sl[sslot]['structure']['members'])):
+            display_structure_field_erc7201(sl[sslot], i)
+        #print(sl[sslot]['structure']['members'])
+
 def display_all_storage(name, binfo):
     """
     Displays all storage data of the given artefact
     """
     print("-"*100)
+    info("[Displaying storage slots]")
     storageLayout = get_contract_storage(name, binfo)
+    (_ ,erc7201_storageLayout) = get_erc7201_storage(name, binfo)
     
-    if storageLayout is None:
-        error(f"One of the artefact files is not in the correct format")
-        error(f"- with foundry")
-        error("\tforge build --evm-version cancun --extra-output storageLayout --build-info")
-        error(f"- with hardhat")
-        error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
-        exit(1)
+    # code.interact(local=locals())
+    #todo display ERC7201
+    # if storageLayout is None:
+    #     error(f"One of the artefact files is not in the correct format")
+    #     error(f"- with foundry")
+    #     error("\tforge build --evm-version cancun --extra-output storageLayout --build-info")
+    #     error(f"- with hardhat")
+    #     error("\tIn solidity.settings:  outputSelection: { '*': { '*': ['storageLayout'] } },")
+    #     exit(1)
     info(f"[{name}] storage slots:")
-    display_slots(storageLayout)
+    if storageLayout is not None:
+        display_slots(storageLayout)
+    if erc7201_storageLayout != {}:
+        display_erc7201_slots(erc7201_storageLayout)
 
 
 def get_contract_content_from_debug_info(name, debug_info):
@@ -478,7 +531,7 @@ def get_contract_initfuncs(inheritanceMap={}, name="", binfo="", depth=0):
 def check_all_initialize_functions_are_called(name, binfo):
     """
     Checks that all initialize function are called in other initializers
-    ex: initialize -> __RentrancyGuard_init() -> __Reentrancy_init_unchained()
+    ex: initialize -> __RentrancyGuard_init() -> __Reentrancy_init_unchained()—
     1. Get the contract definition
     2. For that definition get all baseContract (basically inheritances)
         - add dependency between contract + baseContract
