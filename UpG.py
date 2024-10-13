@@ -31,10 +31,9 @@ Upgrade Guardian:
     - initialize() an reinitialize() method with initialize modifier
     - detect immutable usage in contract
 
-    - check for storage changes (implem v1 vs v2)
+    - check for storage changes (implem v1 vs v2 or proxy vs implem)
+    - check for storage changes with ERC7201 structs
     - check for storage clash (proxy vs implementation)
-    - handle ERC7201 (structures changes)
-        - TODO - try to find ERC7201 storages even if classical storage is used 
 
     - check for function clashing between proxy and implmentation
     - check that all initializer are called in main contract (and not more than once)
