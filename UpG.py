@@ -313,7 +313,8 @@ def get_erc7201_storage(sc, binfo, visited=[], depth=0):
     
     #get all bytes32 variables in the current contract
     for sv in ct.stateVars:
-        if 'name' in ct.stateVars[sv].typeName.keys() and ct.stateVars[sv].typeName.name == 'bytes32':
+        #number in expression means that the contract stores the raw value (0x...) (this could be an expression (keccak("...")))
+        if 'name' in ct.stateVars[sv].typeName.keys() and ct.stateVars[sv].typeName.name == 'bytes32' and 'number' in ct.stateVars[sv].expression:
             b32_val = ct.stateVars[sv].expression.number
             erc7201_storages[b32_val] = {'name': sv, 'contract': sc, 'depth': depth}
    
